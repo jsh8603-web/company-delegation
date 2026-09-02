@@ -1,0 +1,25 @@
+{
+  "UserPromptSubmit": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$DEVIN_PLUGIN_ROOT/scripts/inject.ps1\"",
+          "timeout": 30
+        }
+      ]
+    }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "exec",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$DEVIN_PLUGIN_ROOT/scripts/guard.ps1\"",
+          "timeout": 20
+        }
+      ]
+    }
+  ]
+}

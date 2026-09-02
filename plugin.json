@@ -1,0 +1,10 @@
+{
+  "name": "company-delegation",
+  "version": "0.1.0",
+  "description": "Devin-only fable orchestration: grok main session delegates implementation to luna workers.",
+  "author": "jsh8603-web",
+  "homepage": "https://github.com/jsh8603-web/company-delegation",
+  "repository": "https://github.com/jsh8603-web/company-delegation",
+  "license": "MIT",
+  "keywords": ["orchestration", "delegation", "devin", "hooks"]
+}
