@@ -114,14 +114,8 @@ for ($i = 1; $i -le $MaxRounds; $i++) {
 
     $vText = Read-Utf8 -Path $vOut
 
-    # Last verdict line wins: the model may restate the format before ruling.
-    $roundVerdict = 'FAIL'
-    $matches = [regex]::Matches($vText, '(?i)VERDICT:\s*(PASS|FAIL)')
-    if ($matches.Count -gt 0) {
-        $roundVerdict = $matches[$matches.Count - 1].Groups[1].Value.ToUpperInvariant()
-    }
-    else {
-        $roundVerdict = 'FAIL'
+    $roundVerdict = Get-Verdict -Text $vText
+    if ($vText -notmatch '(?i)VERDICT:\s*(PASS|FAIL)') {
         Write-FableLog "rendezvous run=$runId round=$i no VERDICT line found; treated as FAIL"
     }
 

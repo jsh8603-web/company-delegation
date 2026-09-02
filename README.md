@@ -28,6 +28,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 체크아웃에서 설치하면 실행할 런처와 등록된 훅이 같은 버전을 가리킨다. 훅·스킬만 필요하면
 `devin plugins install jsh8603-web/company-delegation` 로도 된다.
 
+설치 후 판정 로직이 성한지 확인한다. devin 을 부르지 않으므로 즉시 끝나고 과금도 없다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\selftest.ps1
+```
+
+`passed=N failed=0` 과 함께 `checks_run=N` 이 찍힌다. **`failed=0` 만 보지 말고 `checks_run`
+개수를 같이 봐라** — 스위트가 중간에 죽어도 그때까지의 PASS 만 찍히기 때문이다.
+
 ⛔ **스크립트를 고쳤으면 `install.ps1` 을 다시 돌려라.** 훅은 설치 시점에 복사된 사본을
 실행하므로, 체크아웃만 고치면 훅은 옛 코드를 계속 쓴다.
 

@@ -233,6 +233,17 @@ function Invoke-DevinRun {
     }
 }
 
+function Get-Verdict {
+    # Reads the verifier's ruling. The last ruling wins: a model often restates the
+    # required format before it actually rules.
+    # No ruling at all is a FAIL - the absence of a verdict is not a pass.
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text)
+    if (-not $Text) { return 'FAIL' }
+    $m = [regex]::Matches($Text, '(?i)VERDICT:\s*(PASS|FAIL)')
+    if ($m.Count -eq 0) { return 'FAIL' }
+    return $m[$m.Count - 1].Groups[1].Value.ToUpperInvariant()
+}
+
 function Get-TreeSnapshot {
     # Cheap fingerprint of a worktree, used to detect a verifier that edited files
     # it was told not to touch.
