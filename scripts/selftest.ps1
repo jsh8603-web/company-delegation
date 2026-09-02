@@ -58,6 +58,41 @@ $env:FABLE_ROLE = 'verifier';  Check 'verifier'            'verifier' (Get-Fable
 $env:FABLE_ROLE = 'nonsense';  Check 'unknown -> main'     'main'     (Get-FableRole)
 $env:FABLE_ROLE = $prevRole
 
+Write-Output '== code path classification =='
+foreach ($p in @('a.py', 'x.ps1', 'lib/util.ts', 'C:\w\s.sh', 'deep/a.tsx')) {
+    Check ("code: $p") $true (Test-IsCodePath -Path $p)
+}
+foreach ($p in @('README.md', 'plugin.json', 'notes.txt', 'a.yaml', 'noext', '')) {
+    Check ("not code: $p") $false (Test-IsCodePath -Path $p)
+}
+
+Write-Output '== hard gate: shell writing code (positive) =='
+foreach ($c in @(
+    "sed -i 's/a/b/' app.py",
+    "perl -pi -e 's/a/b/' lib.js",
+    "echo hi > script.ps1",
+    "cat a >> merged.sh",
+    "tee out.py",
+    "Set-Content -Path 'x.ps1' -Value 'a'",
+    "Add-Content out.js 'x'",
+    "[System.IO.File]::WriteAllText('a.py','x')",
+    "New-Item -Path a.ts -Value 'x'"
+)) { Check ("blocks: $c") $true (Test-ShellWritesCode -Command $c) }
+
+Write-Output '== hard gate: shell NOT writing code (negative) =='
+foreach ($c in @(
+    "sed -n '1,5p' app.py",
+    "cat app.py",
+    "grep -n foo lib.js",
+    "ls -la",
+    "git diff app.py",
+    "echo hi > notes.md",
+    "Get-Content a.py | Out-File report.txt",
+    "python app.py --check",
+    "npm run build",
+    ""
+)) { Check ("allows: $c") $false (Test-ShellWritesCode -Command $c) }
+
 Write-Output '== tree snapshot (verifier edit detection) =='
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ('fable-selftest-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
@@ -83,13 +118,15 @@ finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyCon
 Write-Output '== message files present and substitutable =='
 $required = @('mode-on.md', 'mode-off.md', 'worker.md', 'verifier.md', 'live-warning.md',
               'rendezvous-worker-prompt.md', 'rendezvous-verifier-prompt.md',
-              'rendezvous-feedback.md', 'rendezvous-voided.md')
+              'rendezvous-feedback.md', 'rendezvous-voided.md',
+              'gate-shell-denied.md', 'gate-limit-denied.md')
 foreach ($f in $required) {
     Check ("exists: $f") $true ((Get-MessageText $f).Length -gt 0)
 }
 # Every placeholder a message uses must be one the injector actually replaces.
 $known = @('{{DELEGATE_CMD}}', '{{RENDEZVOUS_CMD}}', '{{REAP_CMD}}', '{{WORKER_MODEL}}',
-           '{{PLUGIN_ROOT}}', '{{COUNT}}', '{{RUNS}}', '{{CONTRACT}}', '{{CRITERIA}}', '{{FEEDBACK}}')
+           '{{PLUGIN_ROOT}}', '{{COUNT}}', '{{RUNS}}', '{{CONTRACT}}', '{{CRITERIA}}', '{{FEEDBACK}}',
+           '{{LIMIT}}', '{{CMD}}', '{{FILES}}', '{{PATH}}')
 $unknown = @()
 foreach ($f in $required) {
     foreach ($m in [regex]::Matches((Get-MessageText $f), '\{\{[A-Z_]+\}\}')) {

@@ -12,7 +12,6 @@
   ],
   "PreToolUse": [
     {
-      "matcher": "exec",
       "hooks": [
         {
           "type": "command",

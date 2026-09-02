@@ -146,6 +146,69 @@ function Read-Utf8 {
     return [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
 }
 
+# --- hard gate helpers -------------------------------------------------------
+
+# Ported from the orchestration gate this system grew out of. The point is that the
+# instruction "delegate implementation" is not enforcement: without this, a main
+# session in `on` mode just implements anyway.
+$script:FableCodeExts = @(
+    'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'py', 'go', 'rs', 'java', 'kt',
+    'kts', 'swift', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'rb', 'php', 'vue',
+    'svelte', 'astro', 'css', 'scss', 'sass', 'less', 'html', 'sh', 'bash',
+    'zsh', 'ps1', 'psm1', 'sql', 'lua', 'dart', 'scala', 'ex', 'exs', 'zig', 'ipynb'
+)
+$script:FableExtAlt = ($script:FableCodeExts -join '|')
+
+function Get-MainEditLimit {
+    # How many different code files the main may edit directly in one turn.
+    if ($env:FABLE_MAIN_EDIT_LIMIT -match '^\d+$') { return [int]$env:FABLE_MAIN_EDIT_LIMIT }
+    return 2
+}
+
+function Test-IsCodePath {
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Path)
+    if (-not $Path -or $Path -notmatch '\.([A-Za-z0-9]+)$') { return $false }
+    return ($script:FableCodeExts -contains $Matches[1].ToLowerInvariant())
+}
+
+function Test-ShellWritesCode {
+    # True when a shell command would write a code file. Deliberately narrow: it must
+    # not fire on reading commands, so the in-place flag is only honoured inside an
+    # option token (an earlier pattern caught hyphens in paths and blocked `sed -n`).
+    param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Command)
+    if (-not $Command) { return $false }
+    $ext = $script:FableExtAlt
+
+    $touchesCode = [regex]::IsMatch($Command, '\.(?:' + $ext + ')\b', 'IgnoreCase')
+
+    $writesInPlace = [regex]::IsMatch($Command, '\b(?:sed|perl)\b[^|;&]*\s-\w*i\b')
+    if ($writesInPlace -and $touchesCode) { return $true }
+
+    # > file.py / >> file.py / tee file.py
+    if ([regex]::IsMatch($Command, '(?:>>?|\btee\b(?:\s+-\w+)*)\s*[''"]?[^\s''"|;&<>]+\.(?:' + $ext + ')\b', 'IgnoreCase')) {
+        return $true
+    }
+
+    # Set-Content / Add-Content / Out-File targeting a code file. Match the write
+    # cmdlet's own operand so `Get-Content a.py | Out-File report.txt` stays read-only.
+    if ([regex]::IsMatch($Command,
+            '\b(?:set-content|add-content|out-file)\b[^|;&\r\n]*?(?:-(?:literal)?path\s+)?(?:[''"][^''"]+\.(?:' + $ext + ')[''"]|[^\s''"|;&<>]+\.(?:' + $ext + ')\b)',
+            'IgnoreCase')) {
+        return $true
+    }
+
+    # .NET writes and New-Item -Value: not in the original gate, but this environment
+    # is PowerShell-first, so they are the obvious way around it.
+    if ($touchesCode -and [regex]::IsMatch($Command, '\[(?:System\.)?IO\.File\]::(?:WriteAll|AppendAll)', 'IgnoreCase')) {
+        return $true
+    }
+    if ($touchesCode -and [regex]::IsMatch($Command, '\bNew-Item\b[^|;&\r\n]*-Value\b', 'IgnoreCase')) {
+        return $true
+    }
+
+    return $false
+}
+
 # --- hook io -----------------------------------------------------------------
 
 function Read-HookStdin {
