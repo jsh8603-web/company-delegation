@@ -24,6 +24,11 @@ function Get-DelegateCommand {
     return ('powershell -NoProfile -ExecutionPolicy Bypass -File "{0}" -Contract "<contract>" -Cwd "<worktree>"' -f $p)
 }
 
+function Get-RendezvousCommand {
+    $p = Join-Path $script:FableScriptDir 'rendezvous.ps1'
+    return ('powershell -NoProfile -ExecutionPolicy Bypass -File "{0}" -Contract "<contract>" -Criteria "<pass criteria as a command>" -Cwd "<worktree>"' -f $p)
+}
+
 function Get-ReapCommand {
     $p = Join-Path $script:FableScriptDir 'reap.ps1'
     return ('powershell -NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $p)
@@ -86,10 +91,11 @@ function Set-FableMode {
 }
 
 function Get-FableRole {
-    # Workers are spawned by delegate.ps1 with FABLE_ROLE=worker. Anything else is
+    # delegate.ps1 and rendezvous.ps1 stamp FABLE_ROLE on the child. Anything else is
     # the interactive main session. Role-specific instructions are injected from
     # exactly one place (inject.ps1) so two sources can never disagree.
     if ($env:FABLE_ROLE -eq 'worker') { return 'worker' }
+    if ($env:FABLE_ROLE -eq 'verifier') { return 'verifier' }
     return 'main'
 }
 
@@ -175,6 +181,70 @@ function Write-FableLog {
     if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
     $line = ('{0} {1}{2}' -f (Get-Date -Format 'yyyy-MM-ddTHH:mm:ssK'), $Message, [Environment]::NewLine)
     [System.IO.File]::AppendAllText((Join-Path $d 'fable.log'), $line, (New-Object System.Text.UTF8Encoding($false)))
+}
+
+# --- running devin -----------------------------------------------------------
+
+function Invoke-DevinRun {
+    # One place that knows how to run a headless devin turn. Both delegate.ps1 and
+    # rendezvous.ps1 go through here so the two can never drift apart.
+    param(
+        [Parameter(Mandatory = $true)][string]$DevinBin,
+        [Parameter(Mandatory = $true)][string]$Model,
+        [Parameter(Mandatory = $true)][string]$PromptFile,
+        [Parameter(Mandatory = $true)][string]$WorkCwd,
+        [Parameter(Mandatory = $true)][ValidateSet('worker', 'verifier')][string]$Role,
+        [Parameter(Mandatory = $true)][string]$StdoutFile,
+        [Parameter(Mandatory = $true)][string]$StderrFile,
+        [int]$TimeoutSec = 0
+    )
+
+    $prevRole = $env:FABLE_ROLE
+    $env:FABLE_ROLE = $Role
+    Push-Location -LiteralPath $WorkCwd
+    try {
+        $devinArgs = @(
+            '-p',
+            '--model', $Model,
+            '--permission-mode', 'dangerous',
+            '--respect-workspace-trust', 'false',
+            '--prompt-file', $PromptFile
+        )
+        $proc = Start-Process -FilePath $DevinBin -ArgumentList $devinArgs -NoNewWindow -PassThru `
+            -RedirectStandardOutput $StdoutFile -RedirectStandardError $StderrFile
+
+        # Touching .Handle caches the process handle. Without it PowerShell 5.1 leaves
+        # ExitCode null after WaitForExit, which silently destroys completion checking.
+        $null = $proc.Handle
+
+        if ($TimeoutSec -gt 0) {
+            if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
+                try { $proc.Kill() } catch { }
+                return 124
+            }
+            return $proc.ExitCode
+        }
+        $proc.WaitForExit()
+        return $proc.ExitCode
+    }
+    finally {
+        Pop-Location
+        $env:FABLE_ROLE = $prevRole
+    }
+}
+
+function Get-TreeSnapshot {
+    # Cheap fingerprint of a worktree, used to detect a verifier that edited files
+    # it was told not to touch.
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $lines = @()
+    Get-ChildItem -LiteralPath $Path -Recurse -File -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notmatch '(\\|/)\.git(\\|/|$)' } |
+        Sort-Object FullName |
+        ForEach-Object {
+            $lines += ('{0}|{1}|{2}' -f $_.FullName, $_.Length, $_.LastWriteTimeUtc.Ticks)
+        }
+    return ($lines -join "`n")
 }
 
 # --- runs --------------------------------------------------------------------

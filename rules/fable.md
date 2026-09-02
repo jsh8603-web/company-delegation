@@ -11,7 +11,8 @@ description: devin 위임 오케스트레이션 — 사용 가능한 명령과 �
 |---|---|
 | 모드 확인 | `powershell -NoProfile -File "<PLUGIN>/scripts/fable.ps1" status` |
 | 모드 전환 | `... fable.ps1 on` / `... fable.ps1 off` |
-| 위임 | `... delegate.ps1 -Contract "<계약>" -Cwd "<작업트리>"` |
+| 위임 (단발) | `... delegate.ps1 -Contract "<계약>" -Cwd "<작업트리>"` |
+| 위임 (랑데부) | `... rendezvous.ps1 -Contract "<계약>" -Criteria "<판정 명령>" -Cwd "<작업트리>"` |
 | 회수·조회 | `... reap.ps1` / `... reap.ps1 -Run <run_id>` |
 
 ⛔ **행동 지시의 정본은 이 파일이 아니다.** 현재 모드와 역할(오케스트레이터냐 워커냐)에 따른

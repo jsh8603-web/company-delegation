@@ -47,10 +47,11 @@ try {
         }
     }
 
-    # A worker re-delegating is a contract violation, not a cost question.
-    if ((Get-FableRole) -eq 'worker') {
-        if ($cmd -match '(?i)\bdevin(\.exe)?\b' -or $cmd -match '(?i)delegate\.ps1') {
-            Deny 'a worker may not delegate. Do the work in your contract scope and return.'
+    # A worker or verifier re-delegating is a contract violation, not a cost question.
+    $role = Get-FableRole
+    if ($role -eq 'worker' -or $role -eq 'verifier') {
+        if ($cmd -match '(?i)\bdevin(\.exe)?\b' -or $cmd -match '(?i)(delegate|rendezvous)\.ps1') {
+            Deny "a $role may not delegate. Do the work in your contract scope and return."
         }
     }
 

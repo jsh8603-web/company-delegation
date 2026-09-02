@@ -56,7 +56,35 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\main.ps1 -Path D:\
 
 세션 안에서는 `/company-delegation:fable` 스킬로도 다룰 수 있다.
 
-### 위임
+### 위임 — 구조를 먼저 고른다
+
+분기는 둘뿐이다. **인수기준을 명령으로 명확히 줄 수 있는가.**
+
+| 인수기준 | 구조 | 판정자 |
+|---|---|---|
+| 명령으로 줄 수 있다 | **랑데부** | 검증자가 실행해 판정, 실패하면 구현자가 다시 돈다 |
+| 애매해서 사람이 봐야 한다 | **단발** | 메인이 받아서 검수한다 |
+
+애매한 기준을 랑데부로 보내면 검증자도 판정하지 못해 루프가 헛돌고, 명확한 기준을 단발로
+보내면 워커의 자기보고를 그대로 받게 된다. 이 분기표는 문서에만 두지 않고 **매 턴 주입되는
+`[fable]` 문구에 직접 들어간다** — 문서에만 있으면 실제로는 선택되지 않기 때문이다.
+
+#### 랑데부 (worker ↔ verifier, 둘 다 luna)
+
+```powershell
+.\scripts\rendezvous.ps1 -Contract "<계약>" -Criteria "<판정 명령>" -Cwd "D:\work\myrepo"
+.\scripts\rendezvous.ps1 -ContractFile .\c.txt -CriteriaFile .\crit.txt -Cwd "D:\work\myrepo" -MaxRounds 3
+```
+
+한 라운드는 `구현자 → 검증자` 다. 검증자는 인수기준의 명령을 실제로 돌리고 마지막 줄에
+`VERDICT: PASS|FAIL` 을 낸다. FAIL 이면 그 사유가 다음 라운드 구현자에게 피드백으로
+들어간다. `-MaxRounds`(기본 3) 안에 PASS 가 없으면 종료 코드 1 로 끝난다.
+
+- 판정 줄이 없으면 **FAIL 로 처리**한다 (없는 판정을 통과로 읽지 않는다).
+- 검증자가 작업트리를 고쳤으면 그 라운드의 PASS 는 **무효**다. 자기가 고친 것을 자기가
+  통과시킨 것이기 때문이고, 스크립트가 파일 스냅샷을 비교해 기계적으로 잡는다.
+
+#### 단발
 
 ```powershell
 .\scripts\delegate.ps1 -Contract "<계약>" -Cwd "D:\work\myrepo"
@@ -85,8 +113,8 @@ plugin.json          매니페스트
 hooks/hooks.json     UserPromptSubmit(주입) · PreToolUse:exec(가드)
 rules/fable.md       명령 참조표 (agent-decided)
 skills/fable/        /company-delegation:fable
-messages/*.md        주입되는 한국어 문구 (모드별·역할별)
-scripts/*.ps1        런처 · 토글 · 주입 · 가드 · 위임 · 회수
+messages/*.md        주입되는 한국어 문구 (모드별·역할별) + 랑데부 프롬프트 템플릿
+scripts/*.ps1        런처 · 토글 · 주입 · 가드 · 위임(단발/랑데부) · 회수
 ```
 
 런타임 상태는 플러그인 안이 아니라 `%USERPROFILE%\.fable-devin\` 에 산다
@@ -105,8 +133,11 @@ scripts/*.ps1        런처 · 토글 · 주입 · 가드 · 위임 · 회수
 rules 와 hook 두 곳에서 주면 반드시 어긋난다. 이 시스템은 `scripts/inject.ps1`
 **한 곳에서만** 주입한다.
 
-- 분기 기준 = `delegate.ps1` 이 워커를 띄울 때 심는 `FABLE_ROLE=worker` 환경변수
+- 분기 기준 = 자식을 띄울 때 심는 `FABLE_ROLE` 환경변수 (`worker` / `verifier` / 없으면 메인)
 - `rules/fable.md` 는 명령 참조표일 뿐이고, "정본은 주입된 `[fable]` 쪽" 이라고 명시한다
+
+같은 이유로 devin 을 실제로 실행하는 코드도 `lib.ps1` 의 `Invoke-DevinRun` 한 곳뿐이다.
+단발과 랑데부가 각자 실행 코드를 들고 있으면 언젠가 한쪽만 고쳐진다.
 
 ### 가드 (`scripts/guard.ps1`)
 

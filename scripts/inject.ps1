@@ -15,6 +15,9 @@ try {
     if ($role -eq 'worker') {
         $text = Get-MessageText 'worker.md'
     }
+    elseif ($role -eq 'verifier') {
+        $text = Get-MessageText 'verifier.md'
+    }
     else {
         $mode = Get-FableMode
         if ($mode -eq 'on') { $text = Get-MessageText 'mode-on.md' }
@@ -31,6 +34,7 @@ try {
 
     $root = Get-PluginRoot
     $text = $text.Replace('{{DELEGATE_CMD}}', (Get-DelegateCommand))
+    $text = $text.Replace('{{RENDEZVOUS_CMD}}', (Get-RendezvousCommand))
     $text = $text.Replace('{{REAP_CMD}}', (Get-ReapCommand))
     $text = $text.Replace('{{WORKER_MODEL}}', (Get-WorkerModel))
     $text = $text.Replace('{{PLUGIN_ROOT}}', $root)

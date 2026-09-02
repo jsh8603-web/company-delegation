@@ -94,41 +94,9 @@ if ($Async -and -not $ResumeRun) {
 $stdoutFile = Join-Path $runDir 'stdout.log'
 $stderrFile = Join-Path $runDir 'stderr.log'
 
-$prevRole = $env:FABLE_ROLE
-$env:FABLE_ROLE = 'worker'
 $started = Get-Date
-Push-Location -LiteralPath $workCwd
-try {
-    $devinArgs = @(
-        '-p',
-        '--model', $model,
-        '--permission-mode', 'dangerous',
-        '--respect-workspace-trust', 'false',
-        '--prompt-file', $promptFile
-    )
-    $proc = Start-Process -FilePath $devin -ArgumentList $devinArgs -NoNewWindow -PassThru `
-        -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
-
-    # Touching .Handle caches the process handle. Without it PowerShell 5.1 leaves
-    # ExitCode null after WaitForExit, which silently destroys completion checking.
-    $null = $proc.Handle
-
-    if ($TimeoutSec -gt 0) {
-        if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
-            try { $proc.Kill() } catch { }
-            $exitCode = 124
-        }
-        else { $exitCode = $proc.ExitCode }
-    }
-    else {
-        $proc.WaitForExit()
-        $exitCode = $proc.ExitCode
-    }
-}
-finally {
-    Pop-Location
-    $env:FABLE_ROLE = $prevRole
-}
+$exitCode = Invoke-DevinRun -DevinBin $devin -Model $model -PromptFile $promptFile -WorkCwd $workCwd `
+    -Role 'worker' -StdoutFile $stdoutFile -StderrFile $stderrFile -TimeoutSec $TimeoutSec
 
 $elapsed = [int]((Get-Date) - $started).TotalSeconds
 

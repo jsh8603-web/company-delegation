@@ -81,7 +81,8 @@ Write-Output "live=$($live.Count)"
 foreach ($id in $live) {
     $d = Get-RunDir -RunId $id
     $m = (Read-Utf8 -Path (Join-Path $d 'meta.json')) | ConvertFrom-Json
-    Write-Output ("  {0}  model={1}  started={2}  cwd={3}" -f $id, $m.model, $m.started, $m.cwd)
+    $kind = if ($m.kind) { $m.kind } else { 'delegate' }
+    Write-Output ("  {0}  [{1}]  model={2}  started={3}  cwd={4}" -f $id, $kind, $m.model, $m.started, $m.cwd)
 }
 
 $finished = @(Get-ChildItem -LiteralPath $runsDir -Directory -ErrorAction SilentlyContinue |
@@ -90,7 +91,13 @@ $finished = @(Get-ChildItem -LiteralPath $runsDir -Directory -ErrorAction Silent
 Write-Output "recent_finished=$($finished.Count)"
 foreach ($f in $finished) {
     $j = (Read-Utf8 -Path (Join-Path $f.FullName 'done.json')) | ConvertFrom-Json
-    Write-Output ("  {0}  exit={1}  elapsed={2}s" -f $f.Name, $j.exit_code, $j.elapsed_s)
+    if ($j.kind -eq 'rendezvous') {
+        Write-Output ("  {0}  [rendezvous]  verdict={1}  rounds={2}/{3}  elapsed={4}s" -f `
+            $f.Name, $j.verdict, $j.rounds_run, $j.max_rounds, $j.elapsed_s)
+    }
+    else {
+        Write-Output ("  {0}  [delegate]  exit={1}  elapsed={2}s" -f $f.Name, $j.exit_code, $j.elapsed_s)
+    }
 }
 Write-Output ''
 Write-Output "detail: -Run <run_id>   cleanup: -Clean [-Days N]   unstick: -Stale"
